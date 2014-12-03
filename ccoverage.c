@@ -57,10 +57,10 @@ int load_locations (char *fn, float locs[][2], int first)
     return nlocs;
 }
 
-void coverage (float locs[][2], int nlocs, float *result, int *npaths, int *ncoin)
+void coverage (float locs[][2], int nlocs, double *result, int *npaths, int *ncoin)
 {
     int np_overall = 0, nc = 0, np, i, j;
-    float hmsum = 0.0, dsum, hm, d, y1, x1, y2, x2;
+    double hmsum = 0.0, dsum, hm, d, y1, x1, y2, x2;
 
     for (i = 0; i < nlocs; i++) {
         y1 = locs[i][0];
@@ -89,29 +89,30 @@ void coverage (float locs[][2], int nlocs, float *result, int *npaths, int *ncoi
     *ncoin = nc;
 }
 
-float mean_coverage(int *opindex, int nopindex)
+double mean_coverage(int *opindex, int nopindex)
 {
     int nfiles = 0, i, j, fno, nlocs, np, nc;
     float locs[MAXLOCS][2];
-    float csum = 0.0, cov;
+    double csum = 0.0, cov;
     char fns[nopindex][MAXFN];
-
+    int njobs = nimsets*6;
+    
+    int current_process = 0;
     for (i = 0; i < nimsets; i++) {
         for (fno = 1; fno < 7; fno++) {
             int params[7] = {opindex[0], opindex[1], opindex[2], opindex[3], nopindex, i, fno};
             MPI_Request request;
-            int proc = (rand() % (num_procs-1)) + 1;
-            //printf("sending: %i\n", proc);
-            MPI_Isend(&params, 7, MPI_INT, proc, JOBTAG, MPI_COMM_WORLD, &request);
+            current_process = (current_process % (num_procs-1)) + 1;
+            MPI_Isend(&params, 7, MPI_INT, current_process, JOBTAG, MPI_COMM_WORLD, &request);
             nfiles++;
         }
     }
 
     int message_num;
-    for(message_num = 0; message_num < nimsets*6; message_num++) {
+    for(message_num = 0; message_num < njobs; message_num++) {
         MPI_Status status;
-        float cov;
-        MPI_Recv(&cov, 1, MPI_FLOAT, MPI_ANY_SOURCE, RESULTTAG, MPI_COMM_WORLD, &status);
+        double cov;
+        MPI_Recv(&cov, 1, MPI_DOUBLE, MPI_ANY_SOURCE, RESULTTAG, MPI_COMM_WORLD, &status);
         //printf("recieved: %i\n", status.MPI_SOURCE);
         csum += cov; 
     }
@@ -121,7 +122,7 @@ float mean_coverage(int *opindex, int nopindex)
 
 void handle_coverage_job(int *opindex, int nopindex, int i, int fno) {
     int nlocs = 0, np, nc, j;
-    float cov;
+    double cov;
     float locs[MAXLOCS][2];
     char fns[nopindex][MAXFN];
 
@@ -132,7 +133,7 @@ void handle_coverage_job(int *opindex, int nopindex, int i, int fno) {
     coverage(locs, nlocs, &cov, &np, &nc);
             
     MPI_Request request;
-    MPI_Isend(&cov, 1, MPI_FLOAT, ROOTRANK, RESULTTAG, MPI_COMM_WORLD, &request);
+    MPI_Isend(&cov, 1, MPI_DOUBLE, ROOTRANK, RESULTTAG, MPI_COMM_WORLD, &request);
 }
 
 void handle_message() {
